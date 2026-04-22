@@ -7,12 +7,13 @@ import com.example.transformer.config.MethodRule;
 import com.example.transformer.config.NewMethodSpec;
 import com.example.transformer.config.PackageRule;
 import com.example.transformer.config.TransformConfig;
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.Modifier;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.stmt.BlockStmt;
@@ -40,6 +41,7 @@ public class RuleBasedTransformer {
 
     public RuleBasedTransformer(TransformConfig config) {
         this.config = config;
+        StaticJavaParser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
     }
 
     /**
@@ -134,7 +136,8 @@ public class RuleBasedTransformer {
         cu.accept(new ModifierVisitor<Void>() {
             @Override
             public ClassOrInterfaceDeclaration visit(ClassOrInterfaceDeclaration n, Void arg) {
-                ClassOrInterfaceDeclaration decl = super.visit(n, arg);
+                super.visit(n, arg);
+                ClassOrInterfaceDeclaration decl = n;
 
                 for (ClassRule rule : rules) {
                     if (!rule.isEnabled()) {
@@ -179,7 +182,8 @@ public class RuleBasedTransformer {
         cu.accept(new ModifierVisitor<Void>() {
             @Override
             public ClassOrInterfaceDeclaration visit(ClassOrInterfaceDeclaration n, Void arg) {
-                ClassOrInterfaceDeclaration decl = super.visit(n, arg);
+                super.visit(n, arg);
+                ClassOrInterfaceDeclaration decl = n;
                 String className = decl.getNameAsString();
 
                 // 删除与替换

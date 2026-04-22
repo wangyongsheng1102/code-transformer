@@ -1,6 +1,8 @@
 package com.example.transformer.cli;
 
 import com.example.transformer.config.*;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.example.transformer.core.RuleBasedTransformer;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
@@ -12,7 +14,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * 命令行入口：
@@ -62,6 +63,8 @@ public class TransformerCli {
 
     private static RuleSet loadRuleSet(Path configPath, RuleSetType fallbackType) throws IOException {
         XmlMapper mapper = new XmlMapper();
+        mapper.configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true);
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         RuleSet set = mapper.readValue(configPath.toFile(), RuleSet.class);
         if (set.getType() == null) {
             set.setType(fallbackType);
@@ -79,71 +82,36 @@ public class TransformerCli {
     private static TransformConfig mergeRuleSets(List<RuleSet> sets) {
         TransformConfig config = new TransformConfig();
 
-        Comparator<Object> byPriority = (a, b) -> {
-            int pa = extractPriority(a);
-            int pb = extractPriority(b);
-            return Integer.compare(pa, pb);
-        };
+        List<RuleSet> orderedSets = sets.stream()
+                .sorted(Comparator.comparingInt(set -> extractTypeOrder(set.getType())))
+                .toList();
 
-        List<PackageRule> allPackage = sets.stream()
-                .flatMap(set -> Optional.ofNullable(set.getPackageRules()).orElse(List.of()).stream()
-                        .filter(PackageRule::isEnabled)
-                        .map(r -> tagRuleType(r, set.getType())))
-                .sorted((a, b) -> {
-                    int ta = extractTypeOrder(a);
-                    int tb = extractTypeOrder(b);
-                    if (ta != tb) {
-                        return Integer.compare(ta, tb);
-                    }
-                    return byPriority.compare(a, b);
-                })
-                .map(r -> (PackageRule) r)
-                .collect(Collectors.toList());
+        List<PackageRule> allPackage = new ArrayList<>();
+        List<ImportRule> allImport = new ArrayList<>();
+        List<ClassRule> allClass = new ArrayList<>();
+        List<MethodRule> allMethod = new ArrayList<>();
 
-        List<ImportRule> allImport = sets.stream()
-                .flatMap(set -> Optional.ofNullable(set.getImportRules()).orElse(List.of()).stream()
-                        .filter(ImportRule::isEnabled)
-                        .map(r -> tagRuleType(r, set.getType())))
-                .sorted((a, b) -> {
-                    int ta = extractTypeOrder(a);
-                    int tb = extractTypeOrder(b);
-                    if (ta != tb) {
-                        return Integer.compare(ta, tb);
-                    }
-                    return byPriority.compare(a, b);
-                })
-                .map(r -> (ImportRule) r)
-                .collect(Collectors.toList());
+        for (RuleSet set : orderedSets) {
+            Optional.ofNullable(set.getPackageRules()).orElse(List.of()).stream()
+                    .filter(PackageRule::isEnabled)
+                    .sorted(Comparator.comparingInt(PackageRule::getPriority))
+                    .forEach(allPackage::add);
 
-        List<ClassRule> allClass = sets.stream()
-                .flatMap(set -> Optional.ofNullable(set.getClassRules()).orElse(List.of()).stream()
-                        .filter(ClassRule::isEnabled)
-                        .map(r -> tagRuleType(r, set.getType())))
-                .sorted((a, b) -> {
-                    int ta = extractTypeOrder(a);
-                    int tb = extractTypeOrder(b);
-                    if (ta != tb) {
-                        return Integer.compare(ta, tb);
-                    }
-                    return byPriority.compare(a, b);
-                })
-                .map(r -> (ClassRule) r)
-                .collect(Collectors.toList());
+            Optional.ofNullable(set.getImportRules()).orElse(List.of()).stream()
+                    .filter(ImportRule::isEnabled)
+                    .sorted(Comparator.comparingInt(ImportRule::getPriority))
+                    .forEach(allImport::add);
 
-        List<MethodRule> allMethod = sets.stream()
-                .flatMap(set -> Optional.ofNullable(set.getMethodRules()).orElse(List.of()).stream()
-                        .filter(MethodRule::isEnabled)
-                        .map(r -> tagRuleType(r, set.getType())))
-                .sorted((a, b) -> {
-                    int ta = extractTypeOrder(a);
-                    int tb = extractTypeOrder(b);
-                    if (ta != tb) {
-                        return Integer.compare(ta, tb);
-                    }
-                    return byPriority.compare(a, b);
-                })
-                .map(r -> (MethodRule) r)
-                .collect(Collectors.toList());
+            Optional.ofNullable(set.getClassRules()).orElse(List.of()).stream()
+                    .filter(ClassRule::isEnabled)
+                    .sorted(Comparator.comparingInt(ClassRule::getPriority))
+                    .forEach(allClass::add);
+
+            Optional.ofNullable(set.getMethodRules()).orElse(List.of()).stream()
+                    .filter(MethodRule::isEnabled)
+                    .sorted(Comparator.comparingInt(MethodRule::getPriority))
+                    .forEach(allMethod::add);
+        }
 
         config.setPackageRules(allPackage);
         config.setImportRules(allImport);
@@ -153,62 +121,8 @@ public class TransformerCli {
         return config;
     }
 
-    /**
-     * 为规则打上“来源 RuleSet 类型”的临时标签（通过内部类包装），以便排序时识别 BASE/PROJECT。
-     * 这里采用简单实现：包装成匿名对象，带上一个 type 字段。
-     */
-    private static Object tagRuleType(Object rule, RuleSetType type) {
-        return new Object() {
-            final Object r = rule;
-            final RuleSetType t = type;
-
-            @Override
-            public String toString() {
-                return r.toString();
-            }
-        };
-    }
-
-    private static int extractPriority(Object taggedRule) {
-        Object r = unwrap(taggedRule);
-        if (r instanceof PackageRule pr) {
-            return pr.getPriority();
-        }
-        if (r instanceof ImportRule ir) {
-            return ir.getPriority();
-        }
-        if (r instanceof ClassRule cr) {
-            return cr.getPriority();
-        }
-        if (r instanceof MethodRule mr) {
-            return mr.getPriority();
-        }
-        return 100;
-    }
-
-    private static int extractTypeOrder(Object taggedRule) {
-        if (taggedRule.getClass().isAnonymousClass()) {
-            try {
-                var field = taggedRule.getClass().getDeclaredField("t");
-                field.setAccessible(true);
-                RuleSetType type = (RuleSetType) field.get(taggedRule);
-                return type == RuleSetType.BASE ? 0 : 1;
-            } catch (Exception ignored) {
-            }
-        }
-        return 1;
-    }
-
-    private static Object unwrap(Object taggedRule) {
-        if (taggedRule.getClass().isAnonymousClass()) {
-            try {
-                var field = taggedRule.getClass().getDeclaredField("r");
-                field.setAccessible(true);
-                return field.get(taggedRule);
-            } catch (Exception ignored) {
-            }
-        }
-        return taggedRule;
+    private static int extractTypeOrder(RuleSetType type) {
+        return type == RuleSetType.BASE ? 0 : 1;
     }
 
     /**
