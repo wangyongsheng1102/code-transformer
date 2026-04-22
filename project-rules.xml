@@ -1,0 +1,10 @@
+<RuleSet>
+  <name>ProjectRules</name>
+  <type>PROJECT</type>
+
+  <PackageRules/>
+  <ImportRules/>
+  <ClassRules/>
+  <MethodRules/>
+</RuleSet>
+

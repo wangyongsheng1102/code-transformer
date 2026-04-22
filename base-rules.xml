@@ -1,0 +1,55 @@
+<RuleSet>
+  <name>BaseRules</name>
+  <type>BASE</type>
+
+  <PackageRules>
+    <PackageRule>
+      <enabled>true</enabled>
+      <priority>100</priority>
+      <MatchPrefix>com.example.legacy.struts.action</MatchPrefix>
+      <TargetPrefix>com.example.app.web.controller</TargetPrefix>
+    </PackageRule>
+  </PackageRules>
+
+  <ImportRules>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>100</priority>
+      <Match>com.opensymphony.xwork2.ActionSupport</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>100</priority>
+      <Match>com.opensymphony.xwork2.Action</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>100</priority>
+      <Match>org.apache.struts2.ServletActionContext</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>110</priority>
+      <Match>com.opensymphony.xwork2.</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+  </ImportRules>
+
+  <ClassRules>
+    <ClassRule>
+      <enabled>true</enabled>
+      <priority>100</priority>
+      <ExtendsClass>com.opensymphony.xwork2.ActionSupport</ExtendsClass>
+      <RemoveExtends>true</RemoveExtends>
+      <AddAnnotations>
+        <Annotation>org.springframework.stereotype.Controller</Annotation>
+      </AddAnnotations>
+    </ClassRule>
+  </ClassRules>
+
+  <MethodRules/>
+</RuleSet>
+
