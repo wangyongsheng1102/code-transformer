@@ -51,6 +51,14 @@ public class RuleBasedTransformer {
      * 转换单个 Java 源文件。
      */
     public void transformFile(Path sourceFile, Path outputRoot) throws IOException {
+        transformFile(sourceFile, null, outputRoot);
+    }
+
+    /**
+     * 转换单个 Java 源文件，并按源相对路径输出（优先）。
+     */
+    public void transformFile(Path sourceFile, Path sourceRoot, Path outputRoot) throws IOException {
+        String rawSource = Files.readString(sourceFile, StandardCharsets.UTF_8);
         CompilationUnit cu = StaticJavaParser.parse(sourceFile);
 
         applyPackageRules(cu);
@@ -58,17 +66,31 @@ public class RuleBasedTransformer {
         applyClassRules(cu);
         applyMethodRules(cu);
 
-        // 计算输出路径（基于 package）
-        String pkg = cu.getPackageDeclaration()
-                .map(pd -> pd.getName().toString())
-                .orElse("");
-        Path pkgDir = pkg.isEmpty()
-                ? outputRoot
-                : outputRoot.resolve(pkg.replace('.', '/'));
-        Files.createDirectories(pkgDir);
-
-        Path target = pkgDir.resolve(sourceFile.getFileName().toString());
+        Path target;
+        if (sourceRoot != null && !isFullyCommentedSource(rawSource)) {
+            Path relative = sourceRoot.relativize(sourceFile);
+            target = outputRoot.resolve(relative);
+        } else {
+            // 全注释文件或无 sourceRoot 时，退回 package 路径策略
+            String pkg = cu.getPackageDeclaration()
+                    .map(pd -> pd.getName().toString())
+                    .orElse("");
+            Path pkgDir = pkg.isEmpty()
+                    ? outputRoot
+                    : outputRoot.resolve(pkg.replace('.', '/'));
+            target = pkgDir.resolve(sourceFile.getFileName().toString());
+        }
+        Files.createDirectories(target.getParent());
         Files.writeString(target, cu.toString(), StandardCharsets.UTF_8);
+    }
+
+    private boolean isFullyCommentedSource(String source) {
+        if (source == null || source.isBlank()) {
+            return true;
+        }
+        String withoutBlock = source.replaceAll("(?s)/\\*.*?\\*/", "");
+        String withoutLine = withoutBlock.replaceAll("(?m)//.*$", "");
+        return withoutLine.trim().isEmpty();
     }
 
     private void applyPackageRules(CompilationUnit cu) {

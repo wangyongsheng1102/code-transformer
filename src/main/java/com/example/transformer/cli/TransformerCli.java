@@ -49,7 +49,7 @@ public class TransformerCli {
                 .forEach(p -> {
                     try {
                         System.out.println("Transforming: " + p);
-                        transformer.transformFile(p, options.targetRoot());
+                        transformer.transformFile(p, options.sourceRoot(), options.targetRoot());
                     } catch (IOException e) {
                         System.err.println("Failed to transform " + p + ": " + e.getMessage());
                     }
