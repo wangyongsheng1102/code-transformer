@@ -1,0 +1,239 @@
+<RuleSet>
+  <name>Portal2ProjectRules</name>
+  <type>PROJECT</type>
+
+  <PackageRules/>
+
+  <ImportRules>
+    <!-- javax -> jakarta validation -->
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>100</priority>
+      <Match>javax.validation.</Match>
+      <Action>REPLACE</Action>
+      <ReplacementPrefix>jakarta.validation.</ReplacementPrefix>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>101</priority>
+      <Match>javax.validation.constraints.</Match>
+      <Action>REPLACE</Action>
+      <ReplacementPrefix>jakarta.validation.constraints.</ReplacementPrefix>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>102</priority>
+      <Match>javax.validation.groups.</Match>
+      <Action>REPLACE</Action>
+      <ReplacementPrefix>jakarta.validation.groups.</ReplacementPrefix>
+    </ImportRule>
+
+    <!-- Struts API -> Servlet/Jakarta (portal2 high frequency) -->
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>120</priority>
+      <Match>org.apache.struts2.ServletActionContext</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>121</priority>
+      <Match>org.apache.struts2.dispatcher.SessionMap</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>122</priority>
+      <Match>com.opensymphony.xwork2.</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+
+  </ImportRules>
+
+  <ClassRules>
+    <!-- AbstractAction -> BaseController -->
+    <ClassRule>
+      <enabled>true</enabled>
+      <priority>100</priority>
+      <ExtendsClass>AbstractAction</ExtendsClass>
+      <ReplaceExtends>BaseController</ReplaceExtends>
+      <AddAnnotations>
+        <Annotation>org.springframework.stereotype.Controller</Annotation>
+      </AddAnnotations>
+    </ClassRule>
+
+    <!-- AbstractInterceptor -> HandlerInterceptor + @Component -->
+    <ClassRule>
+      <enabled>true</enabled>
+      <priority>110</priority>
+      <ExtendsClass>AbstractInterceptor</ExtendsClass>
+      <RemoveExtends>true</RemoveExtends>
+      <AddImplements>
+        <Interface>org.springframework.web.servlet.HandlerInterceptor</Interface>
+      </AddImplements>
+      <AddAnnotations>
+        <Annotation>org.springframework.stereotype.Component</Annotation>
+      </AddAnnotations>
+    </ClassRule>
+  </ClassRules>
+
+  <MethodRules>
+    <!-- execute/next/back/login/logout/search/page 等 Action 风格方法统一转 Spring 映射 -->
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>200</priority>
+      <Name>execute</Name>
+      <Action>MODIFY</Action>
+      <AddAnnotations>
+        <Annotation>org.springframework.web.bind.annotation.RequestMapping</Annotation>
+      </AddAnnotations>
+      <AddParameters>
+        <Parameter>org.springframework.ui.ModelMap modelMap</Parameter>
+      </AddParameters>
+    </MethodRule>
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>201</priority>
+      <Name>next</Name>
+      <Action>MODIFY</Action>
+      <AddAnnotations>
+        <Annotation>org.springframework.web.bind.annotation.RequestMapping</Annotation>
+      </AddAnnotations>
+      <AddParameters>
+        <Parameter>org.springframework.ui.ModelMap modelMap</Parameter>
+      </AddParameters>
+    </MethodRule>
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>202</priority>
+      <Name>back</Name>
+      <Action>MODIFY</Action>
+      <AddAnnotations>
+        <Annotation>org.springframework.web.bind.annotation.RequestMapping</Annotation>
+      </AddAnnotations>
+      <AddParameters>
+        <Parameter>org.springframework.ui.ModelMap modelMap</Parameter>
+      </AddParameters>
+    </MethodRule>
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>203</priority>
+      <Name>login</Name>
+      <Action>MODIFY</Action>
+      <AddAnnotations>
+        <Annotation>org.springframework.web.bind.annotation.RequestMapping</Annotation>
+      </AddAnnotations>
+      <AddParameters>
+        <Parameter>org.springframework.ui.ModelMap modelMap</Parameter>
+      </AddParameters>
+    </MethodRule>
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>204</priority>
+      <Name>logout</Name>
+      <Action>MODIFY</Action>
+      <AddAnnotations>
+        <Annotation>org.springframework.web.bind.annotation.RequestMapping</Annotation>
+      </AddAnnotations>
+      <AddParameters>
+        <Parameter>org.springframework.ui.ModelMap modelMap</Parameter>
+      </AddParameters>
+    </MethodRule>
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>205</priority>
+      <Name>search</Name>
+      <Action>MODIFY</Action>
+      <AddAnnotations>
+        <Annotation>org.springframework.web.bind.annotation.RequestMapping</Annotation>
+      </AddAnnotations>
+      <AddParameters>
+        <Parameter>org.springframework.ui.ModelMap modelMap</Parameter>
+      </AddParameters>
+    </MethodRule>
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>206</priority>
+      <Name>page</Name>
+      <Action>MODIFY</Action>
+      <AddAnnotations>
+        <Annotation>org.springframework.web.bind.annotation.RequestMapping</Annotation>
+      </AddAnnotations>
+      <AddParameters>
+        <Parameter>org.springframework.ui.ModelMap modelMap</Parameter>
+      </AddParameters>
+    </MethodRule>
+
+    <!-- SessionMap 的 get/put/remove 迁移为 HttpSession attribute 风格 -->
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>260</priority>
+      <Action>MODIFY</Action>
+      <BodyTextReplacements>
+        <Rule>
+          <From>sessionMap.get(</From>
+          <To>sessionMap.getAttribute(</To>
+        </Rule>
+        <Rule>
+          <From>sessionMap.put(</From>
+          <To>sessionMap.setAttribute(</To>
+        </Rule>
+        <Rule>
+          <From>sessionMap.remove(</From>
+          <To>sessionMap.removeAttribute(</To>
+        </Rule>
+      </BodyTextReplacements>
+    </MethodRule>
+
+    <!-- 高置信高频返回语句替换 -->
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>270</priority>
+      <Action>MODIFY</Action>
+      <BodyTextReplacements>
+        <Rule>
+          <From>return ERROR;</From>
+          <To>return findForward(ERROR);</To>
+        </Rule>
+        <Rule>
+          <From>return INPUT;</From>
+          <To>return findForward(INPUT);</To>
+        </Rule>
+        <Rule>
+          <From>return SUCCESS;</From>
+          <To>return findForward(SUCCESS);</To>
+        </Rule>
+        <Rule>
+          <From>return COMPLETE;</From>
+          <To>return findForward(COMPLETE);</To>
+        </Rule>
+      </BodyTextReplacements>
+    </MethodRule>
+
+    <!-- 增加 findForward 辅助方法（仅对 Controller 迁移类） -->
+    <MethodRule>
+      <enabled>true</enabled>
+      <priority>300</priority>
+      <Action>ADD</Action>
+      <TargetClassPattern>.*(Action|Controller)</TargetClassPattern>
+      <Name>findForward</Name>
+      <NewMethod>
+        <Name>findForward</Name>
+        <ReturnType>java.lang.String</ReturnType>
+        <Parameters>
+          <Parameter>java.lang.String forwardName</Parameter>
+        </Parameters>
+        <BodyTemplate><![CDATA[
+if (forwardName == null) {
+    return null;
+}
+String path = "";
+if (path.isEmpty()) {
+    path = super.findGlobalMapping(forwardName);
+}
+return path;
+]]></BodyTemplate>
+      </NewMethod>
+    </MethodRule>
+  </MethodRules>
+</RuleSet>

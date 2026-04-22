@@ -37,6 +37,14 @@ public class ImportRule {
      * 当 action=REPLACE 时，替换为的新 import。
      */
     private String replacement;
+    /**
+     * 当 action=REPLACE 且 match 为前缀匹配时，使用该前缀拼接原后缀。
+     * 例如：
+     * - match=javax.validation.
+     * - replacementPrefix=jakarta.validation.
+     * - import javax.validation.Validator -> jakarta.validation.Validator
+     */
+    private String replacementPrefix;
 
     public boolean isEnabled() {
         return enabled;
@@ -76,6 +84,14 @@ public class ImportRule {
 
     public void setReplacement(String replacement) {
         this.replacement = replacement;
+    }
+
+    public String getReplacementPrefix() {
+        return replacementPrefix;
+    }
+
+    public void setReplacementPrefix(String replacementPrefix) {
+        this.replacementPrefix = replacementPrefix;
     }
 }
 

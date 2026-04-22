@@ -23,6 +23,11 @@ public class NewMethodSpec {
     private List<String> annotations;
 
     /**
+     * 参数列表，元素格式：\"类型 变量名\"。
+     */
+    private List<String> parameters;
+
+    /**
      * 方法体模板，可以是任意字符串，实际生成时作为注释或占位代码。
      */
     private String bodyTemplate;
@@ -49,6 +54,14 @@ public class NewMethodSpec {
 
     public void setAnnotations(List<String> annotations) {
         this.annotations = annotations;
+    }
+
+    public List<String> getParameters() {
+        return parameters;
+    }
+
+    public void setParameters(List<String> parameters) {
+        this.parameters = parameters;
     }
 
     public String getBodyTemplate() {

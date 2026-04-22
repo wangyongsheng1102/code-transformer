@@ -17,7 +17,7 @@ import java.util.Optional;
 
 /**
  * 命令行入口：
- * java -jar transformer.jar --source /path/to/src --target /path/to/out --base-config base-rules.xml [--project-config project-rules.xml]
+ * java -jar transformer.jar --source /path/to/src --target /path/to/out --base-config base-rules.xml [--project-config project-rules.xml ...]
  */
 public class TransformerCli {
 
@@ -32,8 +32,10 @@ public class TransformerCli {
         if (options.baseConfig() != null) {
             ruleSets.add(loadRuleSet(options.baseConfig(), RuleSetType.BASE));
         }
-        if (options.projectConfig() != null) {
-            ruleSets.add(loadRuleSet(options.projectConfig(), RuleSetType.PROJECT));
+        if (options.projectConfigs() != null && !options.projectConfigs().isEmpty()) {
+            for (Path projectConfig : options.projectConfigs()) {
+                ruleSets.add(loadRuleSet(projectConfig, RuleSetType.PROJECT));
+            }
         }
         if (ruleSets.isEmpty()) {
             System.err.println("No rules loaded. Please provide at least --base-config or --project-config.");
@@ -49,7 +51,7 @@ public class TransformerCli {
                 .forEach(p -> {
                     try {
                         System.out.println("Transforming: " + p);
-                        transformer.transformFile(p, options.targetRoot());
+                        transformer.transformFile(p, options.sourceRoot(), options.targetRoot());
                     } catch (IOException e) {
                         System.err.println("Failed to transform " + p + ": " + e.getMessage());
                     }
@@ -58,7 +60,7 @@ public class TransformerCli {
 
     private static void printUsage() {
         System.out.println("Usage: java -jar transformer.jar --source <srcRoot> --target <outRoot> "
-                + "[--base-config <base-rules.xml>] [--project-config <project-rules.xml>]");
+                + "[--base-config <base-rules.xml>] [--project-config <project-rules.xml>]...");
     }
 
     private static RuleSet loadRuleSet(Path configPath, RuleSetType fallbackType) throws IOException {
@@ -128,19 +130,19 @@ public class TransformerCli {
     /**
      * 简单的命令行参数解析。
      */
-    private record CliOptions(Path sourceRoot, Path targetRoot, Path baseConfig, Path projectConfig) {
+    private record CliOptions(Path sourceRoot, Path targetRoot, Path baseConfig, List<Path> projectConfigs) {
 
         static CliOptions parse(String[] args) {
             Path src = null;
             Path dst = null;
             Path base = null;
-            Path project = null;
+            List<Path> projects = new ArrayList<>();
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
                     case "--source" -> src = Paths.get(args[++i]);
                     case "--target" -> dst = Paths.get(args[++i]);
                     case "--base-config" -> base = Paths.get(args[++i]);
-                    case "--project-config" -> project = Paths.get(args[++i]);
+                    case "--project-config" -> projects.add(Paths.get(args[++i]));
                     default -> {
                     }
                 }
@@ -152,7 +154,7 @@ public class TransformerCli {
                     src.toAbsolutePath(),
                     dst.toAbsolutePath(),
                     base == null ? null : base.toAbsolutePath(),
-                    project == null ? null : project.toAbsolutePath()
+                    projects.stream().map(Path::toAbsolutePath).toList()
             );
         }
     }

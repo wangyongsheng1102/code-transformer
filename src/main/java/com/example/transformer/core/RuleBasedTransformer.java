@@ -4,22 +4,26 @@ import com.example.transformer.config.ClassRule;
 import com.example.transformer.config.ImportRule;
 import com.example.transformer.config.MethodAction;
 import com.example.transformer.config.MethodRule;
+import com.example.transformer.config.NewFieldSpec;
 import com.example.transformer.config.NewMethodSpec;
 import com.example.transformer.config.PackageRule;
+import com.example.transformer.config.TextReplaceRule;
 import com.example.transformer.config.TransformConfig;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
-import com.github.javaparser.ast.expr.Name;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.comments.BlockComment;
 import com.github.javaparser.ast.comments.LineComment;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
+import com.github.javaparser.ast.body.Parameter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -27,6 +31,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * 基于配置规则的共通性转换器。
@@ -48,6 +54,14 @@ public class RuleBasedTransformer {
      * 转换单个 Java 源文件。
      */
     public void transformFile(Path sourceFile, Path outputRoot) throws IOException {
+        transformFile(sourceFile, null, outputRoot);
+    }
+
+    /**
+     * 转换单个 Java 源文件，并按源相对路径输出（优先）。
+     */
+    public void transformFile(Path sourceFile, Path sourceRoot, Path outputRoot) throws IOException {
+        String rawSource = Files.readString(sourceFile, StandardCharsets.UTF_8);
         CompilationUnit cu = StaticJavaParser.parse(sourceFile);
 
         applyPackageRules(cu);
@@ -55,17 +69,31 @@ public class RuleBasedTransformer {
         applyClassRules(cu);
         applyMethodRules(cu);
 
-        // 计算输出路径（基于 package）
-        String pkg = cu.getPackageDeclaration()
-                .map(pd -> pd.getName().toString())
-                .orElse("");
-        Path pkgDir = pkg.isEmpty()
-                ? outputRoot
-                : outputRoot.resolve(pkg.replace('.', '/'));
-        Files.createDirectories(pkgDir);
-
-        Path target = pkgDir.resolve(sourceFile.getFileName().toString());
+        Path target;
+        if (sourceRoot != null && !isFullyCommentedSource(rawSource)) {
+            Path relative = sourceRoot.relativize(sourceFile);
+            target = outputRoot.resolve(relative);
+        } else {
+            // 全注释文件或无 sourceRoot 时，退回 package 路径策略
+            String pkg = cu.getPackageDeclaration()
+                    .map(pd -> pd.getName().toString())
+                    .orElse("");
+            Path pkgDir = pkg.isEmpty()
+                    ? outputRoot
+                    : outputRoot.resolve(pkg.replace('.', '/'));
+            target = pkgDir.resolve(sourceFile.getFileName().toString());
+        }
+        Files.createDirectories(target.getParent());
         Files.writeString(target, cu.toString(), StandardCharsets.UTF_8);
+    }
+
+    private boolean isFullyCommentedSource(String source) {
+        if (source == null || source.isBlank()) {
+            return true;
+        }
+        String withoutBlock = source.replaceAll("(?s)/\\*.*?\\*/", "");
+        String withoutLine = withoutBlock.replaceAll("(?m)//.*$", "");
+        return withoutLine.trim().isEmpty();
     }
 
     private void applyPackageRules(CompilationUnit cu) {
@@ -107,6 +135,9 @@ public class RuleBasedTransformer {
                     } else if (rule.getAction() == ImportRule.ActionType.REPLACE) {
                         if (rule.getReplacement() != null && !rule.getReplacement().isEmpty()) {
                             importDecl.setName(rule.getReplacement());
+                        } else if (rule.getReplacementPrefix() != null && !rule.getReplacementPrefix().isEmpty()) {
+                            String replacement = rule.getReplacementPrefix() + name.substring(match.length());
+                            importDecl.setName(replacement);
                         }
                         return false;
                     } else if (rule.getAction() == ImportRule.ActionType.ADD) {
@@ -147,12 +178,49 @@ public class RuleBasedTransformer {
                         continue;
                     }
                     if (rule.isRemoveExtends()) {
-                        decl.getExtendedTypes().clear();
+                        if (rule.getExtendsClass() != null && !rule.getExtendsClass().isEmpty()) {
+                            String extendsSimple = simpleName(rule.getExtendsClass());
+                            decl.getExtendedTypes().removeIf(t -> t.getNameAsString().equals(extendsSimple));
+                        } else {
+                            decl.getExtendedTypes().clear();
+                        }
+                    }
+                    if (rule.getReplaceExtends() != null && !rule.getReplaceExtends().isEmpty()) {
+                        if (rule.getExtendsClass() != null && !rule.getExtendsClass().isEmpty()) {
+                            String extendsSimple = simpleName(rule.getExtendsClass());
+                            decl.getExtendedTypes().removeIf(t -> t.getNameAsString().equals(extendsSimple));
+                        } else {
+                            decl.getExtendedTypes().clear();
+                        }
+                        String replaceSimple = simpleName(rule.getReplaceExtends());
+                        boolean alreadyExists = decl.getExtendedTypes().stream()
+                                .anyMatch(t -> t.getNameAsString().equals(replaceSimple));
+                        if (!alreadyExists) {
+                            decl.getExtendedTypes().add(new ClassOrInterfaceType(null, replaceSimple));
+                            if (rule.getReplaceExtends().contains(".")) {
+                                ensureImport(cu, rule.getReplaceExtends());
+                            }
+                        }
                     }
                     if (rule.getRemoveImplements() != null && !rule.getRemoveImplements().isEmpty()) {
                         decl.getImplementedTypes().removeIf(t ->
-                                rule.getRemoveImplements().contains(t.getNameAsString())
+                                rule.getRemoveImplements().stream()
+                                        .map(RuleBasedTransformer.this::simpleName)
+                                        .anyMatch(simple -> simple.equals(t.getNameAsString()))
                         );
+                    }
+                    if (rule.getAddImplements() != null && !rule.getAddImplements().isEmpty()) {
+                        for (String impl : rule.getAddImplements()) {
+                            String implSimple = simpleName(impl);
+                            boolean exists = decl.getImplementedTypes().stream()
+                                    .anyMatch(t -> t.getNameAsString().equals(implSimple));
+                            if (!exists) {
+                                decl.getImplementedTypes().add(new ClassOrInterfaceType(null, implSimple));
+                                if (impl.contains(".")) {
+                                    ensureImport(cu, impl);
+                                }
+                            }
+                        }
                     }
                     if (rule.getAddAnnotations() != null) {
                         for (String annFqn : rule.getAddAnnotations()) {
@@ -164,6 +232,11 @@ public class RuleBasedTransformer {
                                 // 确保有对应的 import
                                 ensureImport(cu, annFqn);
                             }
+                        }
+                    }
+                    if (rule.getAddFields() != null && !rule.getAddFields().isEmpty()) {
+                        for (NewFieldSpec fieldSpec : rule.getAddFields()) {
+                            addFieldIfAbsent(decl, cu, fieldSpec);
                         }
                     }
                 }
@@ -191,6 +264,9 @@ public class RuleBasedTransformer {
                     if (!rule.isEnabled()) {
                         continue;
                     }
+                    if (!matchesTargetClass(className, rule.getTargetClassPattern())) {
+                        continue;
+                    }
                     MethodAction action = rule.getAction();
                     if (action == MethodAction.DELETE || action == MethodAction.REPLACE) {
                         List<MethodDeclaration> toRemove = decl.getMethods().stream()
@@ -204,6 +280,19 @@ public class RuleBasedTransformer {
                     }
                 }
 
+                // 在原方法上修改
+                for (MethodRule rule : rules) {
+                    if (!rule.isEnabled() || rule.getAction() != MethodAction.MODIFY) {
+                        continue;
+                    }
+                    if (!matchesTargetClass(className, rule.getTargetClassPattern())) {
+                        continue;
+                    }
+                    decl.getMethods().stream()
+                            .filter(m -> matchesMethod(m, rule))
+                            .forEach(m -> applyModifyRule(cu, m, rule));
+                }
+
                 // 纯新增
                 for (MethodRule rule : rules) {
                     if (!rule.isEnabled() || rule.getAction() != MethodAction.ADD) {
@@ -213,8 +302,7 @@ public class RuleBasedTransformer {
                     if (spec == null || spec.getName() == null || spec.getName().isEmpty()) {
                         continue;
                     }
-                    String pattern = rule.getTargetClassPattern();
-                    if (pattern != null && !pattern.isEmpty() && !className.matches(pattern)) {
+                    if (!matchesTargetClass(className, rule.getTargetClassPattern())) {
                         continue;
                     }
                     boolean exists = decl.getMethods().stream()
@@ -241,7 +329,57 @@ public class RuleBasedTransformer {
                 return false;
             }
         }
+        if (rule.getMatchAnnotations() != null && !rule.getMatchAnnotations().isEmpty()) {
+            Set<String> methodAnnotations = new HashSet<>();
+            method.getAnnotations().forEach(ann -> methodAnnotations.add(ann.getName().getIdentifier()));
+            boolean matched = rule.getMatchAnnotations().stream()
+                    .map(this::simpleName)
+                    .anyMatch(methodAnnotations::contains);
+            if (!matched) {
+                return false;
+            }
+        }
         return true;
+    }
+
+    private void applyModifyRule(CompilationUnit cu, MethodDeclaration method, MethodRule rule) {
+        if (rule.getRenameTo() != null && !rule.getRenameTo().isEmpty()) {
+            method.setName(rule.getRenameTo());
+        }
+
+        if (rule.getAddAnnotations() != null) {
+            for (String annFqn : rule.getAddAnnotations()) {
+                String simple = simpleName(annFqn);
+                boolean exists = method.getAnnotations().stream()
+                        .anyMatch(a -> a.getName().getIdentifier().equals(simple));
+                if (!exists) {
+                    method.addAnnotation(simple);
+                    ensureImport(cu, annFqn);
+                }
+            }
+        }
+
+        if (rule.getAddParameters() != null) {
+            for (String paramSpec : rule.getAddParameters()) {
+                addParameterIfAbsent(cu, method, paramSpec);
+            }
+        }
+
+        if (rule.getBodyTextReplacements() != null && method.getBody().isPresent()) {
+            String body = method.getBody().get().toString();
+            for (TextReplaceRule replacement : rule.getBodyTextReplacements()) {
+                if (replacement == null || replacement.getFind() == null || replacement.getFind().isEmpty()) {
+                    continue;
+                }
+                String to = replacement.getReplace() == null ? "" : replacement.getReplace();
+                if (replacement.isRegex()) {
+                    body = body.replaceAll(replacement.getFind(), to);
+                } else {
+                    body = body.replace(replacement.getFind(), to);
+                }
+            }
+            method.setBody(StaticJavaParser.parseBlock(body));
+        }
     }
 
     private void addNewMethod(ClassOrInterfaceDeclaration decl,
@@ -272,12 +410,98 @@ public class RuleBasedTransformer {
             }
         }
 
-        BlockStmt body = new BlockStmt();
-        body.addOrphanComment(new LineComment("TODO auto-generated by transformer for class " + className));
-        if (spec.getBodyTemplate() != null && !spec.getBodyTemplate().isEmpty()) {
-            body.addOrphanComment(new BlockComment(spec.getBodyTemplate()));
+        if (spec.getParameters() != null) {
+            for (String paramSpec : spec.getParameters()) {
+                addParameterIfAbsent(cu, m, paramSpec);
+            }
         }
-        m.setBody(body);
+
+        if (spec.getBodyTemplate() != null && !spec.getBodyTemplate().isEmpty()) {
+            String rawBody = spec.getBodyTemplate().trim();
+            if (!rawBody.startsWith("{")) {
+                rawBody = "{\n" + rawBody + "\n}";
+            }
+            m.setBody(StaticJavaParser.parseBlock(rawBody));
+        } else {
+            BlockStmt body = new BlockStmt();
+            body.addOrphanComment(new LineComment("TODO auto-generated by transformer for class " + className));
+            m.setBody(body);
+        }
+    }
+
+    private boolean matchesTargetClass(String className, String pattern) {
+        if (pattern == null || pattern.isEmpty()) {
+            return true;
+        }
+        return className.matches(pattern);
+    }
+
+    private void addParameterIfAbsent(CompilationUnit cu, MethodDeclaration method, String paramSpec) {
+        if (paramSpec == null || paramSpec.isBlank()) {
+            return;
+        }
+        String[] parts = paramSpec.trim().split("\\s+");
+        if (parts.length < 2) {
+            return;
+        }
+        String paramName = parts[parts.length - 1];
+        String typeName = String.join(" ", java.util.Arrays.copyOf(parts, parts.length - 1));
+        boolean exists = method.getParameters().stream()
+                .anyMatch(p -> p.getNameAsString().equals(paramName));
+        if (!exists) {
+            method.addParameter(new Parameter(StaticJavaParser.parseType(typeName), new NameExpr(paramName).getName()));
+            ensureImport(cu, typeName);
+        }
+    }
+
+    private void addFieldIfAbsent(ClassOrInterfaceDeclaration decl, CompilationUnit cu, NewFieldSpec spec) {
+        if (spec == null || spec.getName() == null || spec.getName().isBlank()) {
+            return;
+        }
+        String fieldName = spec.getName().trim();
+        boolean exists = decl.getFields().stream()
+                .flatMap(f -> f.getVariables().stream())
+                .anyMatch(v -> v.getNameAsString().equals(fieldName));
+        if (exists) {
+            return;
+        }
+
+        String typeName = spec.getType() == null || spec.getType().isBlank()
+                ? "java.lang.Object"
+                : spec.getType().trim();
+        String parsedTypeName = simpleName(typeName);
+        VariableDeclarator variable = new VariableDeclarator(StaticJavaParser.parseType(parsedTypeName), fieldName);
+        if (spec.getInitializer() != null && !spec.getInitializer().isBlank()) {
+            variable.setInitializer(spec.getInitializer().trim());
+        }
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(variable);
+        field.addModifier(resolveFieldModifier(spec.getModifier()));
+        decl.addMember(field);
+
+        ensureImport(cu, typeName);
+
+        if (spec.getAnnotations() != null) {
+            for (String annFqn : spec.getAnnotations()) {
+                if (annFqn == null || annFqn.isBlank()) {
+                    continue;
+                }
+                String annSimple = simpleName(annFqn.trim());
+                field.addAnnotation(annSimple);
+                ensureImport(cu, annFqn);
+            }
+        }
+    }
+
+    private Modifier.Keyword resolveFieldModifier(String modifier) {
+        if (modifier == null || modifier.isBlank()) {
+            return Modifier.Keyword.PRIVATE;
+        }
+        return switch (modifier.trim().toLowerCase()) {
+            case "public" -> Modifier.Keyword.PUBLIC;
+            case "protected" -> Modifier.Keyword.PROTECTED;
+            default -> Modifier.Keyword.PRIVATE;
+        };
     }
 
     private boolean matchesClassRule(ClassOrInterfaceDeclaration decl, ClassRule rule) {
@@ -303,16 +527,22 @@ public class RuleBasedTransformer {
     }
 
     private String simpleName(String fqn) {
+        if (fqn == null || fqn.isEmpty()) {
+            return fqn;
+        }
         int idx = fqn.lastIndexOf('.');
         return idx >= 0 ? fqn.substring(idx + 1) : fqn;
     }
 
     private void ensureImport(CompilationUnit cu, String fqn) {
-        String simpleName = simpleName(fqn);
+        String normalized = fqn == null ? "" : fqn.trim();
+        if (normalized.isEmpty() || !normalized.contains(".")) {
+            return;
+        }
         boolean exists = cu.getImports().stream()
-                .anyMatch(id -> id.getNameAsString().equals(fqn));
+                .anyMatch(id -> id.getNameAsString().equals(normalized));
         if (!exists) {
-            cu.addImport(new ImportDeclaration(new Name(fqn), false, false));
+            cu.addImport(normalized);
         }
         // 也要确保不会有同名冲突，这里先简单实现：不解决冲突，仅添加 import。
     }

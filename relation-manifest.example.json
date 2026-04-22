@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-04-22T00:00:00Z",
+  "sourceRoots": {
+    "beforeRoot": "/workspace/.analysis/portal2-before/portal2",
+    "afterRoot": "/workspace/.analysis/portal2-after"
+  },
+  "modules": [
+    {
+      "moduleName": "EPTL_WEB",
+      "moduleType": "WEB",
+      "configFiles": {
+        "webXml": "EPTL_WEB/WebContent/WEB-INF/web.xml",
+        "applicationContextXml": "EPTL_WEB/WebContent/WEB-INF/spring/applicationContext.xml",
+        "strutsXml": "EPTL_WEB/src/main/resources/struts.xml",
+        "configLocalProperties": "EPTL_WEB/src/main/resources/config_local.properties"
+      },
+      "componentScans": [
+        "jp.co.unisys.portal.web"
+      ],
+      "actionMappings": [
+        {
+          "actionName": "portalLogin*",
+          "actionClass": "jp.co.unisys.portal.web.action.SU010110PortalLoginAction",
+          "methodExpression": "{1}",
+          "interceptorRefs": [
+            "notLoginStack"
+          ],
+          "results": [
+            {
+              "name": "success",
+              "target": "/SU01/Custom_SU010110CPortalLogin.jsp"
+            }
+          ],
+          "expressionRefs": [
+            "alias"
+          ]
+        }
+      ],
+      "beanDependencies": [
+        {
+          "ownerClass": "SU010110PortalLoginAction",
+          "fieldName": "su0101Service",
+          "fieldType": "SU0101PortalLoginService",
+          "annotation": null,
+          "sourceFile": "EPTL_WEB/src/main/java/jp/co/unisys/portal/web/action/SU010110PortalLoginAction.java"
+        }
+      ],
+      "serviceCalls": [
+        {
+          "serviceClass": "SU0101PortalLoginService",
+          "methodName": "login",
+          "propertyKey": "url.ap.01.01",
+          "endpointPath": "/login",
+          "resolvedUrl": "http://localhost:8080/EPTL_SERVICE/api/1/login",
+          "sourceFile": "EPTL_WEB/src/main/java/jp/co/unisys/portal/web/service/SU0101PortalLoginService.java"
+        }
+      ],
+      "controllerEndpoints": [],
+      "servletApiPrefix": null
+    },
+    {
+      "moduleName": "EPTL_SERVICE",
+      "moduleType": "SERVICE",
+      "configFiles": {
+        "webXml": "EPTL_SERVICE/src/main/webapp/WEB-INF/web.xml",
+        "beansBizXml": "EPTL_SERVICE/src/main/resources/META-INF/spring/beans-biz.xml",
+        "beansWebMvcXml": "EPTL_SERVICE/src/main/resources/META-INF/spring/beans-webmvc.xml"
+      },
+      "componentScans": [
+        "jp.co.unisys.portal.service",
+        "jp.co.unisys.portal.service.controller"
+      ],
+      "actionMappings": [],
+      "beanDependencies": [
+        {
+          "ownerClass": "AP0101LoginController",
+          "fieldName": "loginService",
+          "fieldType": "AP0101LoginService",
+          "annotation": "@Autowired",
+          "sourceFile": "EPTL_SERVICE/src/main/java/jp/co/unisys/portal/service/controller/AP0101LoginController.java"
+        }
+      ],
+      "serviceCalls": [],
+      "controllerEndpoints": [
+        {
+          "controllerClass": "AP0101LoginController",
+          "requestPath": "/login",
+          "httpMethods": [
+            "POST"
+          ],
+          "sourceFile": "EPTL_SERVICE/src/main/java/jp/co/unisys/portal/service/controller/AP0101LoginController.java"
+        }
+      ],
+      "servletApiPrefix": "/api/1"
+    }
+  ],
+  "crossModuleRelations": [
+    {
+      "fromModule": "EPTL_WEB",
+      "serviceClass": "SU0101PortalLoginService",
+      "methodName": "login",
+      "propertyKey": "url.ap.01.01",
+      "targetEndpointPath": "/api/1/login",
+      "toModule": "EPTL_SERVICE",
+      "targetControllerClass": "AP0101LoginController",
+      "resolvedUrl": "http://localhost:8080/EPTL_SERVICE/api/1/login"
+    }
+  ]
+}
