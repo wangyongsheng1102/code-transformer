@@ -59,6 +59,11 @@ public class ClassRule {
      */
     private List<String> addAnnotations;
 
+    /**
+     * 需要新增的字段（类级别基础设施注入），为空则不新增。
+     */
+    private List<NewFieldSpec> addFields;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -129,6 +134,14 @@ public class ClassRule {
 
     public void setAddAnnotations(List<String> addAnnotations) {
         this.addAnnotations = addAnnotations;
+    }
+
+    public List<NewFieldSpec> getAddFields() {
+        return addFields;
+    }
+
+    public void setAddFields(List<NewFieldSpec> addFields) {
+        this.addFields = addFields;
     }
 }
 

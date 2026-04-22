@@ -4,6 +4,7 @@ import com.example.transformer.config.ClassRule;
 import com.example.transformer.config.ImportRule;
 import com.example.transformer.config.MethodAction;
 import com.example.transformer.config.MethodRule;
+import com.example.transformer.config.NewFieldSpec;
 import com.example.transformer.config.NewMethodSpec;
 import com.example.transformer.config.PackageRule;
 import com.example.transformer.config.TextReplaceRule;
@@ -13,7 +14,9 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -231,6 +234,11 @@ public class RuleBasedTransformer {
                             }
                         }
                     }
+                    if (rule.getAddFields() != null && !rule.getAddFields().isEmpty()) {
+                        for (NewFieldSpec fieldSpec : rule.getAddFields()) {
+                            addFieldIfAbsent(decl, cu, fieldSpec);
+                        }
+                    }
                 }
 
                 return decl;
@@ -444,6 +452,56 @@ public class RuleBasedTransformer {
             method.addParameter(new Parameter(StaticJavaParser.parseType(typeName), new NameExpr(paramName).getName()));
             ensureImport(cu, typeName);
         }
+    }
+
+    private void addFieldIfAbsent(ClassOrInterfaceDeclaration decl, CompilationUnit cu, NewFieldSpec spec) {
+        if (spec == null || spec.getName() == null || spec.getName().isBlank()) {
+            return;
+        }
+        String fieldName = spec.getName().trim();
+        boolean exists = decl.getFields().stream()
+                .flatMap(f -> f.getVariables().stream())
+                .anyMatch(v -> v.getNameAsString().equals(fieldName));
+        if (exists) {
+            return;
+        }
+
+        String typeName = spec.getType() == null || spec.getType().isBlank()
+                ? "java.lang.Object"
+                : spec.getType().trim();
+        String parsedTypeName = simpleName(typeName);
+        VariableDeclarator variable = new VariableDeclarator(StaticJavaParser.parseType(parsedTypeName), fieldName);
+        if (spec.getInitializer() != null && !spec.getInitializer().isBlank()) {
+            variable.setInitializer(spec.getInitializer().trim());
+        }
+        FieldDeclaration field = new FieldDeclaration();
+        field.addVariable(variable);
+        field.addModifier(resolveFieldModifier(spec.getModifier()));
+        decl.addMember(field);
+
+        ensureImport(cu, typeName);
+
+        if (spec.getAnnotations() != null) {
+            for (String annFqn : spec.getAnnotations()) {
+                if (annFqn == null || annFqn.isBlank()) {
+                    continue;
+                }
+                String annSimple = simpleName(annFqn.trim());
+                field.addAnnotation(annSimple);
+                ensureImport(cu, annFqn);
+            }
+        }
+    }
+
+    private Modifier.Keyword resolveFieldModifier(String modifier) {
+        if (modifier == null || modifier.isBlank()) {
+            return Modifier.Keyword.PRIVATE;
+        }
+        return switch (modifier.trim().toLowerCase()) {
+            case "public" -> Modifier.Keyword.PUBLIC;
+            case "protected" -> Modifier.Keyword.PROTECTED;
+            default -> Modifier.Keyword.PRIVATE;
+        };
     }
 
     private boolean matchesClassRule(ClassOrInterfaceDeclaration decl, ClassRule rule) {
