@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/relation-manifest.schema.json",
+  "title": "Portal Relation Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "sourceRoots",
+    "modules",
+    "crossModuleRelations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string"
+    },
+    "sourceRoots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "beforeRoot"
+      ],
+      "properties": {
+        "beforeRoot": {
+          "type": "string"
+        },
+        "afterRoot": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/moduleRelation"
+      }
+    },
+    "crossModuleRelations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/crossModuleRelation"
+      }
+    }
+  },
+  "$defs": {
+    "moduleRelation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "moduleName",
+        "moduleType",
+        "configFiles",
+        "componentScans",
+        "actionMappings",
+        "beanDependencies",
+        "serviceCalls",
+        "controllerEndpoints",
+        "servletApiPrefix"
+      ],
+      "properties": {
+        "moduleName": {
+          "type": "string"
+        },
+        "moduleType": {
+          "type": "string",
+          "enum": [
+            "WEB",
+            "SERVICE"
+          ]
+        },
+        "configFiles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "componentScans": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "actionMappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/actionMapping"
+          }
+        },
+        "beanDependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/beanDependency"
+          }
+        },
+        "serviceCalls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/serviceCall"
+          }
+        },
+        "controllerEndpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/controllerEndpoint"
+          }
+        },
+        "servletApiPrefix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "actionMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionName",
+        "actionClass",
+        "methodExpression",
+        "interceptorRefs",
+        "results",
+        "expressionRefs"
+      ],
+      "properties": {
+        "actionName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "actionClass": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "methodExpression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "interceptorRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resultMapping"
+          }
+        },
+        "expressionRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "resultMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "target"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      }
+    },
+    "beanDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerClass",
+        "fieldName",
+        "fieldType",
+        "annotation",
+        "sourceFile"
+      ],
+      "properties": {
+        "ownerClass": {
+          "type": "string"
+        },
+        "fieldName": {
+          "type": "string"
+        },
+        "fieldType": {
+          "type": "string"
+        },
+        "annotation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceFile": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "serviceClass",
+        "methodName",
+        "propertyKey",
+        "endpointPath",
+        "resolvedUrl",
+        "sourceFile"
+      ],
+      "properties": {
+        "serviceClass": {
+          "type": "string"
+        },
+        "methodName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "propertyKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endpointPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resolvedUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceFile": {
+          "type": "string"
+        }
+      }
+    },
+    "controllerEndpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "controllerClass",
+        "requestPath",
+        "httpMethods",
+        "sourceFile"
+      ],
+      "properties": {
+        "controllerClass": {
+          "type": "string"
+        },
+        "requestPath": {
+          "type": "string"
+        },
+        "httpMethods": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sourceFile": {
+          "type": "string"
+        }
+      }
+    },
+    "crossModuleRelation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fromModule",
+        "serviceClass",
+        "methodName",
+        "propertyKey",
+        "targetEndpointPath",
+        "toModule",
+        "targetControllerClass",
+        "resolvedUrl"
+      ],
+      "properties": {
+        "fromModule": {
+          "type": "string"
+        },
+        "serviceClass": {
+          "type": "string"
+        },
+        "methodName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "propertyKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "targetEndpointPath": {
+          "type": "string"
+        },
+        "toModule": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "targetControllerClass": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resolvedUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}
