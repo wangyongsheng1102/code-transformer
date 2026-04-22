@@ -11,11 +11,10 @@ import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
-import com.github.javaparser.ast.expr.Name;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.comments.BlockComment;
 import com.github.javaparser.ast.comments.LineComment;
@@ -107,6 +106,9 @@ public class RuleBasedTransformer {
                     } else if (rule.getAction() == ImportRule.ActionType.REPLACE) {
                         if (rule.getReplacement() != null && !rule.getReplacement().isEmpty()) {
                             importDecl.setName(rule.getReplacement());
+                        } else if (rule.getReplacementPrefix() != null && !rule.getReplacementPrefix().isEmpty()) {
+                            String replacement = rule.getReplacementPrefix() + name.substring(match.length());
+                            importDecl.setName(replacement);
                         }
                         return false;
                     } else if (rule.getAction() == ImportRule.ActionType.ADD) {
@@ -147,12 +149,49 @@ public class RuleBasedTransformer {
                         continue;
                     }
                     if (rule.isRemoveExtends()) {
-                        decl.getExtendedTypes().clear();
+                        if (rule.getExtendsClass() != null && !rule.getExtendsClass().isEmpty()) {
+                            String extendsSimple = simpleName(rule.getExtendsClass());
+                            decl.getExtendedTypes().removeIf(t -> t.getNameAsString().equals(extendsSimple));
+                        } else {
+                            decl.getExtendedTypes().clear();
+                        }
+                    }
+                    if (rule.getReplaceExtends() != null && !rule.getReplaceExtends().isEmpty()) {
+                        if (rule.getExtendsClass() != null && !rule.getExtendsClass().isEmpty()) {
+                            String extendsSimple = simpleName(rule.getExtendsClass());
+                            decl.getExtendedTypes().removeIf(t -> t.getNameAsString().equals(extendsSimple));
+                        } else {
+                            decl.getExtendedTypes().clear();
+                        }
+                        String replaceSimple = simpleName(rule.getReplaceExtends());
+                        boolean alreadyExists = decl.getExtendedTypes().stream()
+                                .anyMatch(t -> t.getNameAsString().equals(replaceSimple));
+                        if (!alreadyExists) {
+                            decl.getExtendedTypes().add(new ClassOrInterfaceType(null, replaceSimple));
+                            if (rule.getReplaceExtends().contains(".")) {
+                                ensureImport(cu, rule.getReplaceExtends());
+                            }
+                        }
                     }
                     if (rule.getRemoveImplements() != null && !rule.getRemoveImplements().isEmpty()) {
                         decl.getImplementedTypes().removeIf(t ->
-                                rule.getRemoveImplements().contains(t.getNameAsString())
+                                rule.getRemoveImplements().stream()
+                                        .map(RuleBasedTransformer.this::simpleName)
+                                        .anyMatch(simple -> simple.equals(t.getNameAsString()))
                         );
+                    }
+                    if (rule.getAddImplements() != null && !rule.getAddImplements().isEmpty()) {
+                        for (String impl : rule.getAddImplements()) {
+                            String implSimple = simpleName(impl);
+                            boolean exists = decl.getImplementedTypes().stream()
+                                    .anyMatch(t -> t.getNameAsString().equals(implSimple));
+                            if (!exists) {
+                                decl.getImplementedTypes().add(new ClassOrInterfaceType(null, implSimple));
+                                if (impl.contains(".")) {
+                                    ensureImport(cu, impl);
+                                }
+                            }
+                        }
                     }
                     if (rule.getAddAnnotations() != null) {
                         for (String annFqn : rule.getAddAnnotations()) {
@@ -303,16 +342,22 @@ public class RuleBasedTransformer {
     }
 
     private String simpleName(String fqn) {
+        if (fqn == null || fqn.isEmpty()) {
+            return fqn;
+        }
         int idx = fqn.lastIndexOf('.');
         return idx >= 0 ? fqn.substring(idx + 1) : fqn;
     }
 
     private void ensureImport(CompilationUnit cu, String fqn) {
-        String simpleName = simpleName(fqn);
+        String normalized = fqn == null ? "" : fqn.trim();
+        if (normalized.isEmpty() || !normalized.contains(".")) {
+            return;
+        }
         boolean exists = cu.getImports().stream()
-                .anyMatch(id -> id.getNameAsString().equals(fqn));
+                .anyMatch(id -> id.getNameAsString().equals(normalized));
         if (!exists) {
-            cu.addImport(new ImportDeclaration(new Name(fqn), false, false));
+            cu.addImport(normalized);
         }
         // 也要确保不会有同名冲突，这里先简单实现：不解决冲突，仅添加 import。
     }

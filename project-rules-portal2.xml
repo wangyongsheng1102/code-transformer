@@ -1,0 +1,81 @@
+<RuleSet>
+  <name>Portal2ProjectRules</name>
+  <type>PROJECT</type>
+
+  <PackageRules/>
+
+  <ImportRules>
+    <!-- javax -> jakarta validation -->
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>100</priority>
+      <Match>javax.validation.</Match>
+      <Action>REPLACE</Action>
+      <ReplacementPrefix>jakarta.validation.</ReplacementPrefix>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>101</priority>
+      <Match>javax.validation.constraints.</Match>
+      <Action>REPLACE</Action>
+      <ReplacementPrefix>jakarta.validation.constraints.</ReplacementPrefix>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>102</priority>
+      <Match>javax.validation.groups.</Match>
+      <Action>REPLACE</Action>
+      <ReplacementPrefix>jakarta.validation.groups.</ReplacementPrefix>
+    </ImportRule>
+
+    <!-- Struts API -> Servlet/Jakarta (portal2 high frequency) -->
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>120</priority>
+      <Match>org.apache.struts2.ServletActionContext</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>121</priority>
+      <Match>org.apache.struts2.dispatcher.SessionMap</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+    <ImportRule>
+      <enabled>true</enabled>
+      <priority>122</priority>
+      <Match>com.opensymphony.xwork2.</Match>
+      <Action>REMOVE</Action>
+    </ImportRule>
+
+  </ImportRules>
+
+  <ClassRules>
+    <!-- AbstractAction -> BaseController -->
+    <ClassRule>
+      <enabled>true</enabled>
+      <priority>100</priority>
+      <ExtendsClass>AbstractAction</ExtendsClass>
+      <ReplaceExtends>BaseController</ReplaceExtends>
+      <AddAnnotations>
+        <Annotation>org.springframework.stereotype.Controller</Annotation>
+      </AddAnnotations>
+    </ClassRule>
+
+    <!-- AbstractInterceptor -> HandlerInterceptor + @Component -->
+    <ClassRule>
+      <enabled>true</enabled>
+      <priority>110</priority>
+      <ExtendsClass>AbstractInterceptor</ExtendsClass>
+      <RemoveExtends>true</RemoveExtends>
+      <AddImplements>
+        <Interface>org.springframework.web.servlet.HandlerInterceptor</Interface>
+      </AddImplements>
+      <AddAnnotations>
+        <Annotation>org.springframework.stereotype.Component</Annotation>
+      </AddAnnotations>
+    </ClassRule>
+  </ClassRules>
+
+  <MethodRules/>
+</RuleSet>

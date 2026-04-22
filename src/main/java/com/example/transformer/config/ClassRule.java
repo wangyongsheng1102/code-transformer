@@ -36,9 +36,21 @@ public class ClassRule {
     private boolean removeExtends;
 
     /**
+     * 替换父类（完整类名或简单类名），为空则不替换。
+     * 例如：BaseController / com.foo.web.BaseController
+     */
+    private String replaceExtends;
+
+    /**
      * 需要移除的接口列表。
      */
     private List<String> removeImplements;
+
+    /**
+     * 需要新增的实现接口列表（完整类名或简单类名），为空则不新增。
+     * 例如：org.springframework.web.servlet.HandlerInterceptor
+     */
+    private List<String> addImplements;
 
     /**
      * 需要增加的注解（完整类名），例如：
@@ -87,12 +99,28 @@ public class ClassRule {
         this.removeExtends = removeExtends;
     }
 
+    public String getReplaceExtends() {
+        return replaceExtends;
+    }
+
+    public void setReplaceExtends(String replaceExtends) {
+        this.replaceExtends = replaceExtends;
+    }
+
     public List<String> getRemoveImplements() {
         return removeImplements;
     }
 
     public void setRemoveImplements(List<String> removeImplements) {
         this.removeImplements = removeImplements;
+    }
+
+    public List<String> getAddImplements() {
+        return addImplements;
+    }
+
+    public void setAddImplements(List<String> addImplements) {
+        this.addImplements = addImplements;
     }
 
     public List<String> getAddAnnotations() {
