@@ -48,6 +48,27 @@ public class MethodRule {
      * - org.springframework.web.bind.annotation.PostMapping
      */
     private List<String> addAnnotations;
+    /**
+     * 匹配的方法注解（简单名或全限定名），为空则不按注解过滤。
+     */
+    private List<String> matchAnnotations;
+
+    /**
+     * 仅对匹配到的方法增加参数，格式：\"类型 变量名\"，例如：
+     * - org.springframework.ui.ModelMap modelMap
+     * - jakarta.servlet.http.HttpServletRequest request
+     */
+    private List<String> addParameters;
+
+    /**
+     * 方法名重命名（仅 MODIFY 生效），为空则不重命名。
+     */
+    private String renameTo;
+
+    /**
+     * 方法体文本替换规则（仅 MODIFY 生效）。
+     */
+    private List<TextReplaceRule> bodyTextReplacements;
 
     public boolean isEnabled() {
         return enabled;
@@ -111,6 +132,38 @@ public class MethodRule {
 
     public void setAddAnnotations(List<String> addAnnotations) {
         this.addAnnotations = addAnnotations;
+    }
+
+    public List<String> getMatchAnnotations() {
+        return matchAnnotations;
+    }
+
+    public void setMatchAnnotations(List<String> matchAnnotations) {
+        this.matchAnnotations = matchAnnotations;
+    }
+
+    public List<String> getAddParameters() {
+        return addParameters;
+    }
+
+    public void setAddParameters(List<String> addParameters) {
+        this.addParameters = addParameters;
+    }
+
+    public String getRenameTo() {
+        return renameTo;
+    }
+
+    public void setRenameTo(String renameTo) {
+        this.renameTo = renameTo;
+    }
+
+    public List<TextReplaceRule> getBodyTextReplacements() {
+        return bodyTextReplacements;
+    }
+
+    public void setBodyTextReplacements(List<TextReplaceRule> bodyTextReplacements) {
+        this.bodyTextReplacements = bodyTextReplacements;
     }
 }
 

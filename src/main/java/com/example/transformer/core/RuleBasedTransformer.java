@@ -6,6 +6,7 @@ import com.example.transformer.config.MethodAction;
 import com.example.transformer.config.MethodRule;
 import com.example.transformer.config.NewMethodSpec;
 import com.example.transformer.config.PackageRule;
+import com.example.transformer.config.TextReplaceRule;
 import com.example.transformer.config.TransformConfig;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
@@ -14,11 +15,12 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.comments.BlockComment;
 import com.github.javaparser.ast.comments.LineComment;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
+import com.github.javaparser.ast.body.Parameter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +28,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * 基于配置规则的共通性转换器。
@@ -230,6 +234,9 @@ public class RuleBasedTransformer {
                     if (!rule.isEnabled()) {
                         continue;
                     }
+                    if (!matchesTargetClass(className, rule.getTargetClassPattern())) {
+                        continue;
+                    }
                     MethodAction action = rule.getAction();
                     if (action == MethodAction.DELETE || action == MethodAction.REPLACE) {
                         List<MethodDeclaration> toRemove = decl.getMethods().stream()
@@ -243,6 +250,19 @@ public class RuleBasedTransformer {
                     }
                 }
 
+                // 在原方法上修改
+                for (MethodRule rule : rules) {
+                    if (!rule.isEnabled() || rule.getAction() != MethodAction.MODIFY) {
+                        continue;
+                    }
+                    if (!matchesTargetClass(className, rule.getTargetClassPattern())) {
+                        continue;
+                    }
+                    decl.getMethods().stream()
+                            .filter(m -> matchesMethod(m, rule))
+                            .forEach(m -> applyModifyRule(cu, m, rule));
+                }
+
                 // 纯新增
                 for (MethodRule rule : rules) {
                     if (!rule.isEnabled() || rule.getAction() != MethodAction.ADD) {
@@ -252,8 +272,7 @@ public class RuleBasedTransformer {
                     if (spec == null || spec.getName() == null || spec.getName().isEmpty()) {
                         continue;
                     }
-                    String pattern = rule.getTargetClassPattern();
-                    if (pattern != null && !pattern.isEmpty() && !className.matches(pattern)) {
+                    if (!matchesTargetClass(className, rule.getTargetClassPattern())) {
                         continue;
                     }
                     boolean exists = decl.getMethods().stream()
@@ -280,7 +299,57 @@ public class RuleBasedTransformer {
                 return false;
             }
         }
+        if (rule.getMatchAnnotations() != null && !rule.getMatchAnnotations().isEmpty()) {
+            Set<String> methodAnnotations = new HashSet<>();
+            method.getAnnotations().forEach(ann -> methodAnnotations.add(ann.getName().getIdentifier()));
+            boolean matched = rule.getMatchAnnotations().stream()
+                    .map(this::simpleName)
+                    .anyMatch(methodAnnotations::contains);
+            if (!matched) {
+                return false;
+            }
+        }
         return true;
+    }
+
+    private void applyModifyRule(CompilationUnit cu, MethodDeclaration method, MethodRule rule) {
+        if (rule.getRenameTo() != null && !rule.getRenameTo().isEmpty()) {
+            method.setName(rule.getRenameTo());
+        }
+
+        if (rule.getAddAnnotations() != null) {
+            for (String annFqn : rule.getAddAnnotations()) {
+                String simple = simpleName(annFqn);
+                boolean exists = method.getAnnotations().stream()
+                        .anyMatch(a -> a.getName().getIdentifier().equals(simple));
+                if (!exists) {
+                    method.addAnnotation(simple);
+                    ensureImport(cu, annFqn);
+                }
+            }
+        }
+
+        if (rule.getAddParameters() != null) {
+            for (String paramSpec : rule.getAddParameters()) {
+                addParameterIfAbsent(cu, method, paramSpec);
+            }
+        }
+
+        if (rule.getBodyTextReplacements() != null && method.getBody().isPresent()) {
+            String body = method.getBody().get().toString();
+            for (TextReplaceRule replacement : rule.getBodyTextReplacements()) {
+                if (replacement == null || replacement.getFind() == null || replacement.getFind().isEmpty()) {
+                    continue;
+                }
+                String to = replacement.getReplace() == null ? "" : replacement.getReplace();
+                if (replacement.isRegex()) {
+                    body = body.replaceAll(replacement.getFind(), to);
+                } else {
+                    body = body.replace(replacement.getFind(), to);
+                }
+            }
+            method.setBody(StaticJavaParser.parseBlock(body));
+        }
     }
 
     private void addNewMethod(ClassOrInterfaceDeclaration decl,
@@ -311,12 +380,48 @@ public class RuleBasedTransformer {
             }
         }
 
-        BlockStmt body = new BlockStmt();
-        body.addOrphanComment(new LineComment("TODO auto-generated by transformer for class " + className));
-        if (spec.getBodyTemplate() != null && !spec.getBodyTemplate().isEmpty()) {
-            body.addOrphanComment(new BlockComment(spec.getBodyTemplate()));
+        if (spec.getParameters() != null) {
+            for (String paramSpec : spec.getParameters()) {
+                addParameterIfAbsent(cu, m, paramSpec);
+            }
         }
-        m.setBody(body);
+
+        if (spec.getBodyTemplate() != null && !spec.getBodyTemplate().isEmpty()) {
+            String rawBody = spec.getBodyTemplate().trim();
+            if (!rawBody.startsWith("{")) {
+                rawBody = "{\n" + rawBody + "\n}";
+            }
+            m.setBody(StaticJavaParser.parseBlock(rawBody));
+        } else {
+            BlockStmt body = new BlockStmt();
+            body.addOrphanComment(new LineComment("TODO auto-generated by transformer for class " + className));
+            m.setBody(body);
+        }
+    }
+
+    private boolean matchesTargetClass(String className, String pattern) {
+        if (pattern == null || pattern.isEmpty()) {
+            return true;
+        }
+        return className.matches(pattern);
+    }
+
+    private void addParameterIfAbsent(CompilationUnit cu, MethodDeclaration method, String paramSpec) {
+        if (paramSpec == null || paramSpec.isBlank()) {
+            return;
+        }
+        String[] parts = paramSpec.trim().split("\\s+");
+        if (parts.length < 2) {
+            return;
+        }
+        String paramName = parts[parts.length - 1];
+        String typeName = String.join(" ", java.util.Arrays.copyOf(parts, parts.length - 1));
+        boolean exists = method.getParameters().stream()
+                .anyMatch(p -> p.getNameAsString().equals(paramName));
+        if (!exists) {
+            method.addParameter(new Parameter(StaticJavaParser.parseType(typeName), new NameExpr(paramName).getName()));
+            ensureImport(cu, typeName);
+        }
     }
 
     private boolean matchesClassRule(ClassOrInterfaceDeclaration decl, ClassRule rule) {
